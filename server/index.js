@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import multer from 'multer';
@@ -11,6 +12,7 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const MAX_FILE_SIZE = parseInt(process.env.MAX_FILE_SIZE) || (10 * 1024 * 1024); // 10MB default
 
 // Middleware
 app.use(cors());
@@ -21,7 +23,7 @@ const storage = multer.memoryStorage();
 const upload = multer({ 
   storage,
   limits: {
-    fileSize: 10 * 1024 * 1024 // 10MB limit
+    fileSize: MAX_FILE_SIZE
   },
   fileFilter: (req, file, cb) => {
     if (file.mimetype === 'application/pdf') {
@@ -52,7 +54,7 @@ app.post('/api/generate-signature', async (req, res) => {
       });
     }
 
-    console.log(`Generating signature for: ${trimmedFirstName} ${trimmedLastName}`);
+    console.log(`Generating signature for server: ${trimmedFirstName} ${trimmedLastName}`);
     
     const result = await generateSignature(trimmedFirstName, trimmedLastName);
     
@@ -118,14 +120,19 @@ app.post('/api/process-pdf-with-position', upload.single('pdf'), async (req, res
 });
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString() });
+  res.json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development'
+  });
 });
 
 // Error handling middleware
 app.use((error, req, res, next) => {
   if (error instanceof multer.MulterError) {
     if (error.code === 'LIMIT_FILE_SIZE') {
-      return res.status(400).json({ error: 'File too large. Maximum size is 10MB.' });
+      const maxSizeMB = Math.round(MAX_FILE_SIZE / (1024 * 1024));
+      return res.status(400).json({ error: `File too large. Maximum size is ${maxSizeMB}MB.` });
     }
   }
   
@@ -135,4 +142,6 @@ app.use((error, req, res, next) => {
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`Max file size: ${Math.round(MAX_FILE_SIZE / (1024 * 1024))}MB`);
 });

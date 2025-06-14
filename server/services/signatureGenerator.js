@@ -1,6 +1,6 @@
 // Signature generation service using the provided signature module
 const API_CONFIG = {
-  BASE_URL: 'https://onlinesignatures.net/api/get-signatures-data',
+  BASE_URL: process.env.SIGNATURE_API_URL || 'https://onlinesignatures.net/api/get-signatures-data',
   MIN_STYLE: 0,
   MAX_STYLE: 8,
   TYPOGRAPHY_KEYS: [

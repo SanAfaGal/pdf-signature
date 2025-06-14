@@ -23,6 +23,8 @@ interface SignatureData {
   };
 }
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+
 export function SignaturePreview({ firstName, lastName, onSignatureSelect, onCancel }: SignaturePreviewProps) {
   const [currentSignature, setCurrentSignature] = useState<SignatureData | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -35,7 +37,7 @@ export function SignaturePreview({ firstName, lastName, onSignatureSelect, onCan
     setError(null);
 
     try {
-      const response = await fetch('/api/generate-signature', {
+      const response = await fetch(`${API_BASE_URL}/generate-signature`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

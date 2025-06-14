@@ -1,6 +1,8 @@
 import { useCallback } from 'react';
 import { SignatureData } from '../types';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+
 export function usePdfProcessor() {
   const processWithSignature = useCallback(async (
     file: File,
@@ -21,7 +23,7 @@ export function usePdfProcessor() {
       formDataToSend.append('firstName', signatureData.metadata.firstName);
       formDataToSend.append('lastName', signatureData.metadata.lastName);
 
-      const response = await fetch('/api/process-pdf-with-position', {
+      const response = await fetch(`${API_BASE_URL}/process-pdf-with-position`, {
         method: 'POST',
         body: formDataToSend,
       });
