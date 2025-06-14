@@ -61,7 +61,6 @@ async function fetchSignatureData({ firstName, lastName, styles = getRandomInt(A
 
 export async function generateSignature(firstName, lastName) {
   try {
-    console.log(`Generating signature for: ${firstName} ${lastName}`);
     
     const apiData = await fetchSignatureData({ firstName, lastName });
     const providers = Object.keys(apiData.data);
