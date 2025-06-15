@@ -10,6 +10,7 @@ import { ProcessingStep } from './components/steps/ProcessingStep';
 import { CompleteStep } from './components/steps/CompleteStep';
 import { Instructions } from './components/Instructions';
 import { LoadingSpinner } from './components/ui/LoadingSpinner';
+import { FirstTimeWarning } from './components/ui/FirstTimeWarning';
 
 // Lazy load heavy components
 const SignaturePreview = lazy(() => 
@@ -100,6 +101,9 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
+      {/* First Time Warning */}
+      <FirstTimeWarning />
+
       {/* Signature Preview Modal */}
       {state.currentStep === 'signature' && (
         <Suspense fallback={
