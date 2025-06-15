@@ -103,10 +103,12 @@ function App() {
       {/* Signature Preview Modal */}
       {state.currentStep === 'signature' && (
         <Suspense fallback={
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-2xl p-8">
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl p-6 sm:p-8 max-w-sm w-full">
               <LoadingSpinner size="lg" className="mx-auto" />
-              <p className="text-gray-600 mt-4">Cargando generador de firmas...</p>
+              <p className="text-gray-600 mt-4 text-center text-sm sm:text-base">
+                Cargando generador de firmas...
+              </p>
             </div>
           </div>
         }>
@@ -119,7 +121,7 @@ function App() {
         </Suspense>
       )}
 
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-6 sm:py-8">
         <AppHeader />
 
         <div className="max-w-4xl mx-auto">
