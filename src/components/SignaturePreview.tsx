@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { RefreshCw, Check, X } from 'lucide-react';
 import { LoadingSpinner } from './ui/LoadingSpinner';
 import { useDebounce } from '../hooks/useDebounce';
+import { SignatureData } from '../types';
 
 interface SignaturePreviewProps {
   firstName: string;
@@ -10,20 +11,97 @@ interface SignaturePreviewProps {
   onCancel: () => void;
 }
 
-interface SignatureData {
-  imageUrl: string;
-  imageBuffer: ArrayBuffer;
-  metadata: {
-    firstName: string;
-    lastName: string;
-    provider: string;
-    typographyKey: string;
-    usedStyle: number;
-    generatedAt: string;
-  };
+// Configuration for signature API
+const SIGNATURE_API_URL = 'https://onlinesignatures.net/api/get-signatures-data';
+const MIN_STYLE = 0;
+const MAX_STYLE = 8;
+const TYPOGRAPHY_KEYS = [
+  'nikita Sobolev',
+  'SNikita', 
+  'Nsobolev',
+  'Nikita',
+  'Sobolev',
+  'SANikita',
+  'NASobolev'
+];
+
+// Helper functions
+function getRandomInt(min: number, max: number): number {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+function getRandomTypography(): string {
+  return TYPOGRAPHY_KEYS[getRandomInt(0, TYPOGRAPHY_KEYS.length - 1)];
+}
+
+function buildApiUrl(firstName: string, lastName: string, styles: number): string {
+  const url = new URL(SIGNATURE_API_URL);
+  url.searchParams.append('first-name', firstName);
+  url.searchParams.append('last-name', lastName);
+  url.searchParams.append('styles', styles.toString());
+  return url.toString();
+}
+
+// Fetch signature data directly from the API (from browser)
+async function fetchSignatureData(firstName: string, lastName: string): Promise<SignatureData> {
+  const styles = getRandomInt(MIN_STYLE, MAX_STYLE);
+  const apiUrl = buildApiUrl(firstName, lastName, styles);
+
+  // Fetch from API directly from browser
+  const response = await fetch(apiUrl);
+  
+  if (!response.ok) {
+    throw new Error(`API request failed: HTTP ${response.status} ${response.statusText}`);
+  }
+
+  const apiData = await response.json();
+
+  if (!apiData.data) {
+    throw new Error('Invalid API response: missing data field');
+  }
+
+  const providers = Object.keys(apiData.data);
+  
+  if (providers.length === 0) {
+    throw new Error('No providers available in API response');
+  }
+
+  // Select random provider and typography
+  const randomProvider = providers[getRandomInt(0, providers.length - 1)];
+  const signatures = apiData.data[randomProvider];
+  const typographyKey = getRandomTypography();
+  const signature = signatures[typographyKey];
+
+  // Find a valid signature
+  const selectedSignature = (signature && signature.image) 
+    ? signature 
+    : Object.values(signatures).find((sig: any) => sig?.image);
+
+  if (!selectedSignature || !selectedSignature.image) {
+    throw new Error(`No valid signature found for provider '${randomProvider}'`);
+  }
+
+  // Download the signature image
+  const imageResponse = await fetch(selectedSignature.image);
+  if (!imageResponse.ok) {
+    throw new Error(`Failed to download signature image: ${imageResponse.status}`);
+  }
+
+  const imageBuffer = await imageResponse.arrayBuffer();
+
+  return {
+    imageUrl: selectedSignature.image,
+    imageBuffer: imageBuffer,
+    metadata: {
+      firstName,
+      lastName,
+      provider: randomProvider,
+      typographyKey,
+      usedStyle: styles,
+      generatedAt: new Date().toISOString()
+    }
+  };
+}
 
 export function SignaturePreview({ firstName, lastName, onSignatureSelect, onCancel }: SignaturePreviewProps) {
   const [currentSignature, setCurrentSignature] = useState<SignatureData | null>(null);
@@ -37,24 +115,60 @@ export function SignaturePreview({ firstName, lastName, onSignatureSelect, onCan
     setError(null);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/generate-signature`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          firstName: firstName.trim(),
-          lastName: lastName.trim(),
-        }),
-      });
+      // Try to call API directly from browser first (avoids IP blocking)
+      // If CORS fails, fallback to server proxy
+      let signatureData: SignatureData;
+      
+      try {
+        signatureData = await fetchSignatureData(
+          firstName.trim(),
+          lastName.trim()
+        );
+      } catch (directError: any) {
+        // If direct call fails (likely CORS or network error), use server as proxy
+        const isCorsError = directError.message?.includes('Failed to fetch') || 
+                           directError.message?.includes('CORS') ||
+                           directError.name === 'TypeError';
+        
+        if (isCorsError) {
+          console.log('CORS error detected, using server proxy instead');
+        } else {
+          console.log('Direct API call failed, using server proxy:', directError);
+        }
+        
+        const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+        const response = await fetch(`${API_BASE_URL}/generate-signature`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            firstName: firstName.trim(),
+            lastName: lastName.trim(),
+          }),
+        });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Error generando la firma');
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Error generando la firma');
+        }
+
+        const data = await response.json();
+        // Convert imageUrl to ArrayBuffer for compatibility
+        const imageResponse = await fetch(data.imageUrl);
+        if (!imageResponse.ok) {
+          throw new Error(`Failed to download signature image: ${imageResponse.status}`);
+        }
+        const imageBuffer = await imageResponse.arrayBuffer();
+        
+        signatureData = {
+          imageUrl: data.imageUrl,
+          imageBuffer: imageBuffer,
+          metadata: data.metadata
+        };
       }
-
-      const data = await response.json();
-      setCurrentSignature(data);
+      
+      setCurrentSignature(signatureData);
     } catch (error) {
       console.error('Error generating signature:', error);
       setError(error instanceof Error ? error.message : 'Error desconocido');

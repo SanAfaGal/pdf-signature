@@ -35,6 +35,8 @@ const upload = multer({
 });
 
 // Routes
+// NOTE: This endpoint is kept as fallback but is no longer used by default.
+// The frontend now calls the signature API directly from the browser to avoid IP blocking in production.
 app.post('/api/generate-signature', async (req, res) => {
   try {
     const { firstName, lastName } = req.body;
