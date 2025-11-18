@@ -40,11 +40,40 @@ async function fetchSignatureData({ firstName, lastName, styles = getRandomInt(A
 
   const apiUrl = buildApiUrl({ 'first-name': firstName, 'last-name': lastName, styles });
 
+  // Browser-like headers to avoid 403 Forbidden errors
+  const headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'application/json, text/plain, */*',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'Referer': 'https://onlinesignatures.net/',
+    'Origin': 'https://onlinesignatures.net',
+    'Connection': 'keep-alive',
+    'Sec-Fetch-Dest': 'empty',
+    'Sec-Fetch-Mode': 'cors',
+    'Sec-Fetch-Site': 'same-origin'
+  };
+
   try {
-    const response = await fetch(apiUrl);
+    console.log(`Fetching signature data from: ${apiUrl}`);
+    const response = await fetch(apiUrl, {
+      method: 'GET',
+      headers: headers
+    });
 
     if (!response.ok) {
-      throw new Error(`API request failed: HTTP ${response.status} ${response.statusText}`);
+      const errorDetails = {
+        status: response.status,
+        statusText: response.statusText,
+        url: apiUrl,
+        headers: Object.fromEntries(response.headers.entries())
+      };
+      console.error('API request failed:', errorDetails);
+      
+      if (response.status === 403) {
+        throw new Error(`API request failed: HTTP ${response.status} ${response.statusText}. The API may be blocking the request. URL: ${apiUrl}`);
+      }
+      throw new Error(`API request failed: HTTP ${response.status} ${response.statusText}. URL: ${apiUrl}`);
     }
 
     const data = await response.json();
@@ -55,6 +84,13 @@ async function fetchSignatureData({ firstName, lastName, styles = getRandomInt(A
 
     return { ...data, usedStyle: styles };
   } catch (error) {
+    console.error('Error fetching signature data:', {
+      message: error.message,
+      url: apiUrl,
+      firstName,
+      lastName,
+      styles
+    });
     throw new Error(`Failed to fetch signature data: ${error.message}`);
   }
 }
