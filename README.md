@@ -118,6 +118,27 @@ SIGNATURE_API_URL=https://onlinesignatures.net/api/get-signatures-data
 
 # File Upload Limits
 MAX_FILE_SIZE=10485760  # 10MB in bytes
+
+# Signature Position (Backend - Server-side defaults)
+# Coordinates are in pixels from top-left corner
+SIGNATURE_X=200        # X coordinate (horizontal position)
+SIGNATURE_Y=400        # Y coordinate (vertical position from top)
+SIGNATURE_PAGE=1       # Page number where signature should be placed
+```
+
+### Frontend Environment Variables
+
+Create a `.env` file in the root directory for frontend configuration:
+
+```env
+# Frontend Configuration
+VITE_API_URL=/api
+
+# Signature Position (Frontend - Client-side defaults)
+# Coordinates are in pixels from top-left corner
+VITE_SIGNATURE_X=200   # X coordinate (horizontal position)
+VITE_SIGNATURE_Y=375   # Y coordinate (vertical position from top)
+VITE_SIGNATURE_PAGE=1  # Page number where signature should be placed
 ```
 
 ### Build Configuration
@@ -243,6 +264,17 @@ Ensure these environment variables are set in production:
 NODE_ENV=production
 PORT=3001
 SIGNATURE_API_URL=https://onlinesignatures.net/api/get-signatures-data
+
+# Optional: Customize signature position
+SIGNATURE_X=200
+SIGNATURE_Y=400
+SIGNATURE_PAGE=1
+
+# Frontend variables (if using Vite build)
+VITE_API_URL=/api
+VITE_SIGNATURE_X=200
+VITE_SIGNATURE_Y=375
+VITE_SIGNATURE_PAGE=1
 ```
 
 ## 🤝 Contributing
