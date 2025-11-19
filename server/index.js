@@ -82,13 +82,19 @@ app.post('/api/process-pdf-with-position', upload.single('pdf'), async (req, res
 
     const { signatureImageUrl, positionX, positionY, page, firstName, lastName } = req.body;
 
-    if (!signatureImageUrl || !positionX || !positionY) {
+    if (!signatureImageUrl) {
       return res.status(400).json({ 
-        error: 'Datos de posición de firma requeridos' 
+        error: 'URL de imagen de firma requerida' 
       });
     }
 
+    // Get coordinates from request body, environment variables, or use defaults
+    const x = positionX ? parseFloat(positionX) : (parseFloat(process.env.SIGNATURE_X) || 200);
+    const y = positionY ? parseFloat(positionY) : (parseFloat(process.env.SIGNATURE_Y) || 400);
+    const pageNumber = page ? parseInt(page) : (parseInt(process.env.SIGNATURE_PAGE) || 1);
+
     console.log(`Processing PDF with positioned signature: ${req.file.originalname}`);
+    console.log(`Signature position: x=${x}, y=${y}, page=${pageNumber}`);
     
     const result = await processSignedPDF(
       req.file.buffer, 
@@ -98,9 +104,9 @@ app.post('/api/process-pdf-with-position', upload.single('pdf'), async (req, res
       {
         imageUrl: signatureImageUrl,
         position: {
-          x: parseFloat(positionX),
-          y: parseFloat(positionY),
-          page: parseInt(page) || 1
+          x,
+          y,
+          page: pageNumber
         }
       }
     );

@@ -14,12 +14,17 @@ export function usePdfProcessor() {
     try {
       onProgress('Procesando PDF con firma...');
 
+      // Get coordinates from environment variables or use defaults
+      const positionX = import.meta.env.VITE_SIGNATURE_X || '200';
+      const positionY = import.meta.env.VITE_SIGNATURE_Y || '375';
+      const page = import.meta.env.VITE_SIGNATURE_PAGE || '1';
+
       const formDataToSend = new FormData();
       formDataToSend.append('pdf', file);
       formDataToSend.append('signatureImageUrl', signatureData.imageUrl);
-      formDataToSend.append('positionX', '200');
-      formDataToSend.append('positionY', '375');
-      formDataToSend.append('page', '1');
+      formDataToSend.append('positionX', positionX);
+      formDataToSend.append('positionY', positionY);
+      formDataToSend.append('page', page);
       formDataToSend.append('firstName', signatureData.metadata.firstName);
       formDataToSend.append('lastName', signatureData.metadata.lastName);
 

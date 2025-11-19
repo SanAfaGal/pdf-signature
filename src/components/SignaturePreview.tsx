@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { RefreshCw, Check, X } from 'lucide-react';
 import { LoadingSpinner } from './ui/LoadingSpinner';
 import { useDebounce } from '../hooks/useDebounce';
@@ -43,18 +43,26 @@ function buildApiUrl(firstName: string, lastName: string, styles: number): strin
 }
 
 // Fetch signature data directly from the API (from browser)
-async function fetchSignatureData(firstName: string, lastName: string): Promise<SignatureData> {
+async function fetchSignatureData(firstName: string, lastName: string, signal?: AbortSignal): Promise<SignatureData> {
   const styles = getRandomInt(MIN_STYLE, MAX_STYLE);
   const apiUrl = buildApiUrl(firstName, lastName, styles);
 
   // Fetch from API directly from browser
-  const response = await fetch(apiUrl);
+  const response = await fetch(apiUrl, { signal });
+  
+  if (signal?.aborted) {
+    throw new Error('Request aborted');
+  }
   
   if (!response.ok) {
     throw new Error(`API request failed: HTTP ${response.status} ${response.statusText}`);
   }
 
   const apiData = await response.json();
+
+  if (signal?.aborted) {
+    throw new Error('Request aborted');
+  }
 
   if (!apiData.data) {
     throw new Error('Invalid API response: missing data field');
@@ -82,12 +90,21 @@ async function fetchSignatureData(firstName: string, lastName: string): Promise<
   }
 
   // Download the signature image
-  const imageResponse = await fetch(selectedSignature.image);
+  const imageResponse = await fetch(selectedSignature.image, { signal });
+  
+  if (signal?.aborted) {
+    throw new Error('Request aborted');
+  }
+  
   if (!imageResponse.ok) {
     throw new Error(`Failed to download signature image: ${imageResponse.status}`);
   }
 
   const imageBuffer = await imageResponse.arrayBuffer();
+
+  if (signal?.aborted) {
+    throw new Error('Request aborted');
+  }
 
   return {
     imageUrl: selectedSignature.image,
@@ -107,10 +124,31 @@ export function SignaturePreview({ firstName, lastName, onSignatureSelect, onCan
   const [currentSignature, setCurrentSignature] = useState<SignatureData | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Use refs to track state and prevent duplicate calls
+  const isGeneratingRef = useRef(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const lastGeneratedRef = useRef<string>('');
 
   const generateSignature = useCallback(async () => {
-    if (isGenerating) return; // Prevent duplicate requests
+    // Prevent duplicate requests
+    if (isGeneratingRef.current) {
+      return;
+    }
     
+    // Create a unique key for this generation request
+    const requestKey = `${firstName.trim()}-${lastName.trim()}`;
+    
+    // Cancel any pending request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    
+    // Create new abort controller for this request
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+    
+    isGeneratingRef.current = true;
     setIsGenerating(true);
     setError(null);
 
@@ -122,9 +160,15 @@ export function SignaturePreview({ firstName, lastName, onSignatureSelect, onCan
       try {
         signatureData = await fetchSignatureData(
           firstName.trim(),
-          lastName.trim()
+          lastName.trim(),
+          abortController.signal
         );
       } catch (directError: any) {
+        // Check if request was aborted
+        if (abortController.signal.aborted || directError.message === 'Request aborted') {
+          return;
+        }
+        
         // If direct call fails (likely CORS or network error), use server as proxy
         const isCorsError = directError.message?.includes('Failed to fetch') || 
                            directError.message?.includes('CORS') ||
@@ -146,7 +190,12 @@ export function SignaturePreview({ firstName, lastName, onSignatureSelect, onCan
             firstName: firstName.trim(),
             lastName: lastName.trim(),
           }),
+          signal: abortController.signal,
         });
+
+        if (abortController.signal.aborted) {
+          return;
+        }
 
         if (!response.ok) {
           const errorData = await response.json();
@@ -154,8 +203,20 @@ export function SignaturePreview({ firstName, lastName, onSignatureSelect, onCan
         }
 
         const data = await response.json();
+        
+        if (abortController.signal.aborted) {
+          return;
+        }
+        
         // Convert imageUrl to ArrayBuffer for compatibility
-        const imageResponse = await fetch(data.imageUrl);
+        const imageResponse = await fetch(data.imageUrl, {
+          signal: abortController.signal,
+        });
+        
+        if (abortController.signal.aborted) {
+          return;
+        }
+        
         if (!imageResponse.ok) {
           throw new Error(`Failed to download signature image: ${imageResponse.status}`);
         }
@@ -168,21 +229,57 @@ export function SignaturePreview({ firstName, lastName, onSignatureSelect, onCan
         };
       }
       
-      setCurrentSignature(signatureData);
-    } catch (error) {
+      // Only update state if request wasn't aborted
+      if (!abortController.signal.aborted) {
+        setCurrentSignature(signatureData);
+        lastGeneratedRef.current = requestKey;
+      }
+    } catch (error: any) {
+      // Don't set error if request was aborted
+      if (error.name === 'AbortError' || 
+          abortController.signal.aborted || 
+          error.message === 'Request aborted') {
+        return;
+      }
       console.error('Error generating signature:', error);
       setError(error instanceof Error ? error.message : 'Error desconocido');
     } finally {
-      setIsGenerating(false);
+      // Only reset if this is still the current request
+      if (!abortController.signal.aborted) {
+        isGeneratingRef.current = false;
+        setIsGenerating(false);
+        abortControllerRef.current = null;
+      }
     }
-  }, [firstName, lastName, isGenerating]);
+  }, [firstName, lastName]);
 
   // Debounce the generate function to prevent rapid clicks
   const debouncedGenerate = useDebounce(generateSignature, 500);
 
-  React.useEffect(() => {
-    generateSignature();
-  }, [firstName, lastName]);
+  // Only generate signature once when component mounts or when firstName/lastName actually change
+  useEffect(() => {
+    const requestKey = `${firstName.trim()}-${lastName.trim()}`;
+    
+    // Only generate if:
+    // 1. Not currently generating
+    // 2. This is a different request than the last one
+    // 3. Both firstName and lastName are not empty
+    if (!isGeneratingRef.current && 
+        lastGeneratedRef.current !== requestKey &&
+        firstName.trim() && 
+        lastName.trim()) {
+      generateSignature();
+    }
+    
+    // Cleanup: abort any pending requests when component unmounts or props change
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+      isGeneratingRef.current = false;
+    };
+  }, [firstName, lastName, generateSignature]);
 
   const handleSelectSignature = useCallback(() => {
     if (currentSignature && !isGenerating) {

@@ -23,9 +23,19 @@ export async function insertSignatureIntoPdf(pdfBuffer, signatureImageBuffer, po
     const maxHeight = height * 0.1; // Max 10% of page height
     const signatureImageDims = signatureImage.scaleToFit(maxWidth, maxHeight);
     
-    // Use fixed coordinates (200, 400) - convert to PDF coordinate system
-    let signatureX = 200;
-    let signatureY = height - 400; // PDF coordinates are from bottom-left, so we subtract from height
+    // Use coordinates from position parameter, environment variables, or defaults
+    // Environment variables: SIGNATURE_X, SIGNATURE_Y (in pixels from top-left)
+    // PDF coordinates are from bottom-left, so we need to convert
+    const defaultX = parseFloat(process.env.SIGNATURE_X) || 200;
+    const defaultY = parseFloat(process.env.SIGNATURE_Y) || 400;
+    
+    // Get Y coordinate (from top) - either from position, env var, or default
+    const yFromTop = position?.y ?? defaultY;
+    
+    // Convert to PDF coordinates (from bottom-left)
+    // Subtract image height so the top of the image is at yFromTop pixels from the top
+    let signatureX = position?.x ?? defaultX;
+    let signatureY = height - yFromTop - signatureImageDims.height;
     
     // Ensure signature stays within page bounds
     signatureX = Math.max(0, Math.min(signatureX, width - signatureImageDims.width));
